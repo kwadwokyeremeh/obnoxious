@@ -64,9 +64,9 @@ cd /root/windisk
 
 mkdir winfile
 
-wget -O win10.iso --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://bit.ly/4aCjkM2
+wget -O win22k.iso --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://94-130-130-242.top/Getintopc.com/Windows.server.2022.with.update.20348.1487.10in1.x64.v23.01.11.iso?md5=3Avz5DN0gL4U_dGSOJ5EkQ&expires=1774383894
 
-mount -o loop win10.iso winfile
+mount -o loop win22k.iso winfile
 
 rsync -avz --progress winfile/* /mnt
 
