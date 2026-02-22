@@ -62,19 +62,35 @@ EOF
 
 cd /root/windisk
 
+
 mkdir winfile
+WINDOWS_ISO_URL="https://138-201-250-118.top/Getintopc.com/Windows.server.2022.with.update.20348.1487.10in1.x64.v23.01.11.iso?md5=xWE_RISV1n_COz6SMl_y7w&expires=1774312601"
+wget -c "$WINDOWS_ISO_URL" -O "windows_server_2022.iso"
 
-wget -O win22k.iso --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://94-130-130-242.top/Getintopc.com/Windows.server.2022.with.update.20348.1487.10in1.x64.v23.01.11.iso?md5=3Avz5DN0gL4U_dGSOJ5EkQ&expires=1774383894
+if [ $? -ne 0 ]; then
+    echo "Error: One or more ISO downloads failed. Please check the URLs and your network connection."
+    exit 1
+fi
+echo "ISO downloads complete."
 
-mount -o loop win22k.iso winfile
+mount -o loop windows_server_2022.iso winfile
 
 rsync -avz --progress winfile/* /mnt
 
 umount winfile
 
-wget -O virtio.iso https://bit.ly/4d1g7Ht
+VIRTIO_ISO_URL="https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.285-1/virtio-win-0.1.285.iso"
 
-mount -o loop virtio.iso winfile
+wget -c "$VIRTIO_ISO_URL" -O "virtio_win.iso"
+
+if [ $? -ne 0 ]; then
+    echo "Error: One or more ISO downloads failed. Please check the URLs and your network connection."
+    exit 1
+fi
+
+echo "ISO downloads complete."
+
+mount -o loop virtio_win.iso winfile
 
 mkdir /mnt/sources/virtio
 
