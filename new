@@ -1,0 +1,100 @@
+#!/bin/bash
+# Exit immediately if any command fails
+set -e
+
+apt update -y && apt upgrade -y
+apt install grub2 wimtools ntfs-3g parted rsync wget -y
+
+# 1. Get the disk size in GB and convert to MB
+disk_size_gb=$(parted /dev/sda --script print | awk '/^Disk \/dev\/sda:/ {print int($3)}')
+disk_size_mb=$((disk_size_gb * 1024))
+
+# Calculate partition size (25% of total size for installer, rest for OS)
+part_size_mb=$((disk_size_mb / 4))
+
+# 2. Create MBR (msdos) partition table (Crucial for legacy bootmgr)
+parted /dev/sda --script -- mklabel msdos
+
+# Create two primary NTFS partitions
+parted /dev/sda --script -- mkpart primary ntfs 1MB ${part_size_mb}MB
+parted /dev/sda --script -- mkpart primary ntfs ${part_size_mb}MB 100%
+
+# Set partition 1 as bootable (active)
+parted /dev/sda --script -- set 1 boot on
+
+# Inform kernel of changes
+partprobe /dev/sda
+sleep 5
+
+# 3. Format the partitions (Fast format)
+mkfs.ntfs -f -Q /dev/sda1
+mkfs.ntfs -f -Q /dev/sda2
+
+echo "NTFS partitions created successfully."
+
+# 4. Mount partitions
+mkdir -p /mnt/win_installer
+mkdir -p /mnt/storage_box
+
+mount /dev/sda1 /mnt/win_installer
+
+# 5. Install Legacy GRUB to the MBR of the drive
+# Using --target=i386-pc explicitly forces legacy BIOS installation
+grub-install --target=i386-pc --boot-directory=/mnt/win_installer/boot /dev/sda
+
+# 6. Create the Legacy GRUB configuration
+cat <<EOF > /mnt/win_installer/boot/grub/grub.cfg
+insmod part_msdos
+insmod ntfs
+
+menuentry "Windows 10 Installer" {
+    set root='hd0,msdos1'
+    search --no-floppy --set=root --file /bootmgr
+    ntldr /bootmgr
+    boot
+}
+EOF
+
+# 7. Mount your storage box via SSHFS to pull files (reusing your successful setup)
+# Replace with your actual credentials
+mkdir -p /tmp/sshfs_mount
+sshfs -p23 u664772@u583496.your-storagebox.de:/home/backup /tmp/sshfs_mount
+
+# 8. Mount and Extract Windows ISO contents to the boot partition
+mkdir -p /tmp/iso_win
+mount -o loop /tmp/sshfs_mount/win10.iso /tmp/iso_win
+
+echo "Copying Windows installer files to /dev/sda1..."
+rsync -ah --progress /tmp/iso_win/ /mnt/win_installer/
+umount /tmp/iso_win
+
+# 9. Inject VirtIO drivers into the Windows boot.wim (Index 2 is Windows Setup environment)
+mkdir -p /tmp/iso_virtio
+mount -o loop /tmp/sshfs_mount/virtio.iso /tmp/iso_virtio
+
+mkdir -p /mnt/win_installer/sources/virtio
+echo "Copying VirtIO drivers..."
+rsync -ah --progress /tmp/iso_virtio/ /mnt/win_installer/sources/virtio/
+umount /tmp/iso_virtio
+
+# Unmount SSHFS since we are done tracking network files
+umount /tmp/sshfs_mount
+
+# 10. Update boot.wim using wimlib-imagex
+# The source path inside the wimlib command must match the root folder layout of the drive
+cd /mnt/win_installer/sources
+
+cat <<EOF > wim_cmd.txt
+add /mnt/win_installer/sources/virtio /virtio_drivers
+EOF
+
+wimlib-imagex update boot.wim 2 < wim_cmd.txt
+rm wim_cmd.txt
+
+# 11. Cleanup and sync caches
+cd /
+umount /mnt/win_installer
+
+echo "Done! The server will now reboot into the local Windows Installer stub."
+sleep 5
+reboot
